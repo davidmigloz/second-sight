@@ -20,6 +20,17 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Toast;
 
+import com.davidmiguel.secondsight.filters.Filter;
+import com.davidmiguel.secondsight.filters.NoneFilter;
+import com.davidmiguel.secondsight.filters.convolution.StrokeEdgesFilter;
+import com.davidmiguel.secondsight.filters.curve.CrossProcessCurveFilter;
+import com.davidmiguel.secondsight.filters.curve.PortraCurveFilter;
+import com.davidmiguel.secondsight.filters.curve.ProviaCurveFilter;
+import com.davidmiguel.secondsight.filters.curve.VelviaCurveFilter;
+import com.davidmiguel.secondsight.filters.mixer.RecolorCMVFilter;
+import com.davidmiguel.secondsight.filters.mixer.RecolorRCFilter;
+import com.davidmiguel.secondsight.filters.mixer.RecolorRGVFilter;
+
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
@@ -45,6 +56,10 @@ public class CameraActivity extends AppCompatActivity
     private static final String STATE_IMAGE_SIZE_INDEX = "imageSizeIndex";
     // An ID for items in the image size submenu
     private static final int MENU_GROUP_ID_SIZE = 2;
+    // Keys for storing the indices of the active filters
+    private static final String STATE_CURVE_FILTER_INDEX = "curveFilterIndex";
+    private static final String STATE_MIXER_FILTER_INDEX = "mixerFilterIndex";
+    private static final String STATE_CONVOLUTION_FILTER_INDEX = "convolutionFilterIndex";
     // The index of the active camera
     private int mCameraIndex;
     // The index of the active image size
@@ -65,6 +80,14 @@ public class CameraActivity extends AppCompatActivity
     // Whether an asynchronous menu action is in progress
     // If so, menu interaction should be disabled
     private boolean mIsMenuLocked;
+    // The filters
+    private Filter[] mCurveFilters;
+    private Filter[] mMixerFilters;
+    private Filter[] mConvolutionFilters;
+    // The indices of the active filters
+    private int mCurveFilterIndex;
+    private int mMixerFilterIndex;
+    private int mConvolutionFilterIndex;
     // The OpenCV loader callback
     private BaseLoaderCallback mLoaderCallback =
             new BaseLoaderCallback(this) {
@@ -74,7 +97,25 @@ public class CameraActivity extends AppCompatActivity
                         case LoaderCallbackInterface.SUCCESS:
                             Log.d(TAG, "OpenCV loaded successfully");
                             mCameraView.enableView();
+                            //mCameraView.enableFpsMeter();
                             mBgr = new Mat();
+                            mCurveFilters = new Filter[] {
+                                    new NoneFilter(),
+                                    new PortraCurveFilter(),
+                                    new ProviaCurveFilter(),
+                                    new VelviaCurveFilter(),
+                                    new CrossProcessCurveFilter()
+                            };
+                            mMixerFilters = new Filter[] {
+                                    new NoneFilter(),
+                                    new RecolorRCFilter(),
+                                    new RecolorRGVFilter(),
+                                    new RecolorCMVFilter()
+                            };
+                            mConvolutionFilters = new Filter[] {
+                                    new NoneFilter(),
+                                    new StrokeEdgesFilter()
+                            };
                             break;
                         default:
                             super.onManagerConnected(status);
@@ -92,14 +133,27 @@ public class CameraActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
 
         final Window window = getWindow();
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // Don't switch off screen
+
         if (savedInstanceState != null) {
-            mCameraIndex = savedInstanceState.getInt(STATE_CAMERA_INDEX, 0);
-            mImageSizeIndex = savedInstanceState.getInt(STATE_IMAGE_SIZE_INDEX, 0);
+            mCameraIndex = savedInstanceState.getInt(
+                    STATE_CAMERA_INDEX, 0);
+            mImageSizeIndex = savedInstanceState.getInt(
+                    STATE_IMAGE_SIZE_INDEX, 0);
+            mCurveFilterIndex = savedInstanceState.getInt(
+                    STATE_CURVE_FILTER_INDEX, 0);
+            mMixerFilterIndex = savedInstanceState.getInt(
+                    STATE_MIXER_FILTER_INDEX, 0);
+            mConvolutionFilterIndex = savedInstanceState.getInt(
+                    STATE_CONVOLUTION_FILTER_INDEX, 0);
         } else {
             mCameraIndex = 0;
             mImageSizeIndex = 0;
+            mCurveFilterIndex = 0;
+            mMixerFilterIndex = 0;
+            mConvolutionFilterIndex = 0;
         }
+
         final Camera camera;
         CameraInfo cameraInfo = new CameraInfo();
         Camera.getCameraInfo(mCameraIndex, cameraInfo);
@@ -158,8 +212,19 @@ public class CameraActivity extends AppCompatActivity
     public void onSaveInstanceState(Bundle savedInstanceState) {
         // Save the current camera index
         savedInstanceState.putInt(STATE_CAMERA_INDEX, mCameraIndex);
+
         // Save the current image size index
-        savedInstanceState.putInt(STATE_IMAGE_SIZE_INDEX, mImageSizeIndex);
+        savedInstanceState.putInt(STATE_IMAGE_SIZE_INDEX,
+                mImageSizeIndex);
+
+        // Save the current filter indices
+        savedInstanceState.putInt(STATE_CURVE_FILTER_INDEX,
+                mCurveFilterIndex);
+        savedInstanceState.putInt(STATE_MIXER_FILTER_INDEX,
+                mMixerFilterIndex);
+        savedInstanceState.putInt(STATE_CONVOLUTION_FILTER_INDEX,
+                mConvolutionFilterIndex);
+
         super.onSaveInstanceState(savedInstanceState);
     }
 
@@ -206,6 +271,25 @@ public class CameraActivity extends AppCompatActivity
             return true;
         }
         switch (item.getItemId()) {
+            case R.id.menu_next_curve_filter:
+                mCurveFilterIndex++;
+                if (mCurveFilterIndex == mCurveFilters.length) {
+                    mCurveFilterIndex = 0;
+                }
+                return true;
+            case R.id.menu_next_mixer_filter:
+                mMixerFilterIndex++;
+                if (mMixerFilterIndex == mMixerFilters.length) {
+                    mMixerFilterIndex = 0;
+                }
+                return true;
+            case R.id.menu_next_convolution_filter:
+                mConvolutionFilterIndex++;
+                if (mConvolutionFilterIndex ==
+                        mConvolutionFilters.length) {
+                    mConvolutionFilterIndex = 0;
+                }
+                return true;
             case R.id.menu_next_camera:
                 mIsMenuLocked = true;
                 // With another camera index, recreate the activity
@@ -243,19 +327,27 @@ public class CameraActivity extends AppCompatActivity
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         final Mat rgba = inputFrame.rgba();
+
+        // Apply the active filters.
+        mCurveFilters[mCurveFilterIndex].apply(rgba, rgba);
+        mMixerFilters[mMixerFilterIndex].apply(rgba, rgba);
+        mConvolutionFilters[mConvolutionFilterIndex].apply(rgba, rgba);
+
         if (mIsPhotoPending) {
             mIsPhotoPending = false;
             takePhoto(rgba);
         }
+
         if (mIsCameraFrontFacing) {
             // Mirror (horizontally flip) the preview
             Core.flip(rgba, rgba, 1);
         }
+
         return rgba;
     }
 
     /**
-     *  Saves the image to a disk and enable other apps to find it via Android's MediaStore.
+     * Saves the image to a disk and enable other apps to find it via Android's MediaStore.
      */
     private void takePhoto(final Mat rgba) {
         // Determine the path and metadata for the photo
