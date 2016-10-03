@@ -34,6 +34,7 @@ import com.davidmiguel.secondsight.filters.mixer.RecolorRGVFilter;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.JavaCameraView;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
@@ -45,8 +46,7 @@ import org.opencv.imgproc.Imgproc;
 import java.io.File;
 import java.util.List;
 
-public class CameraActivity extends AppCompatActivity
-        implements CameraBridgeViewBase.CvCameraViewListener2 {
+public class CameraActivity extends AppCompatActivity implements CvCameraViewListener2 {
 
     // A tag for log output
     private static final String TAG = CameraActivity.class.getSimpleName();
